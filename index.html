@@ -32,7 +32,7 @@
                 // 1. Accept all devices (This bypasses the UUID filter problem)
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ namePrefix: 'CowBarn' }],
-                    optionalServices: SERVICE
+                    optionalServices: [SERVICE]
                 });
 
                 const server = await device.gatt.connect();
