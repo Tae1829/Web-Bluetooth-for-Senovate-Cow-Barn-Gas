@@ -1,73 +1,159 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cow Barn Sensor Config</title>
+<title>Cow Barn Sensor Config</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
-        .card { border: 1px solid #ccc; padding: 15px; border-radius: 8px; max-width: 400px; }
+        h2 {text-align: center;}
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; background-color: #f4f4f9; }
+        .card { background: white; border: 1px solid #ccc; padding: 20px; border-radius: 8px; max-width: 400px; margin: auto; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        button { padding: 10px 15px; margin: 5px 0; cursor: pointer; border-radius: 5px; border: 1px solid #0056b3; background-color: #007bff; color: white; font-weight: bold; width: 100%; }
+        button:hover { background-color: #0056b3; }
+        button.danger { background-color: #dc3545; border-color: #a71d2a; }
+        button.danger:hover { background-color: #a71d2a; }
+        
+        /* Preset buttons styling */
+        .preset-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        .preset-row button { background-color: #28a745; border-color: #1e7e34; }
+        .preset-row button:hover { background-color: #1e7e34; }
+        
+        input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        .status-box { padding: 10px; background: #e9ecef; border-radius: 5px; margin-bottom: 15px; text-align: center; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h2>R&D Prototype: Sensor Configuration</h2>
     <div class="card">
-        <button onclick="connectBLE()">1. Connect to Sensor</button>
-        <p>Status: <span id="status">Disconnected</span></p>
+        <h2>Cow Barn Sensor Configuration</h2>
+        
+        <div class="status-box" id="status">Status: Disconnected</div>
+        
+        <button onclick="connectBLE()">Connect to Sensor</button>
+        <button class="danger" onclick="disconnectBLE()">Disconnect</button>
+        
         <hr>
-        <label>Measurement Interval (Seconds):</label><br>
-        <input type="number" id="intervalInput" value="60">
-        <button onclick="writeInterval()">2. Update Interval</button>
+        
+        <label>Measurement Interval (Minutes):</label><br>
+        
+        <div class="preset-row">
+            <button onclick="setPreset(1)">1 Min</button>
+            <button onclick="setPreset(5)">5 Min</button>
+            <button onclick="setPreset(10)">10 Min</button>
+        </div>
+
+        <input type="number" id="intervalInput" min="1" max="255" placeholder="Custom minutes (1-255)">
+        
+        <button onclick="writeInterval()">Update Custom Interval</button>
+        <button onclick="readInterval()" style="background-color: #6c757d; border-color: #5a6268;">Read Current Interval</button>
     </div>
 
     <script>
-        // Use the UUIDs we discussed for your Bluedroid setup
-        const SERVICE_UUID = 0x181A;          // Environmental Sensing
-        const CHARACTERISTIC_UUID = 0x2A21;   // Measurement Interval
+        const SERVICE = '0000181a-0000-1000-8000-00805f9b34fb';                 // Environmental Sensing Service
+        const CHARACTERISTIC_UUID = '00002a21-0000-1000-8000-00805f9b34fb';     // Measurement Interval Characteristic
 
+        let bleDevice;
         let sensorCharacteristic;
 
         async function connectBLE() {
             try {
                 document.getElementById('status').innerText = "Searching for all devices...";
                 
-                // 1. Accept all devices (This bypasses the UUID filter problem)
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [0x181A] // <--- Still need this to access it later
+                // Scan for the device
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'CowBarn' }],
+                    optionalServices: [SERVICE]
                 });
 
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(0x181A);
-                sensorCharacteristic = await service.getCharacteristic(0x2A21);
+                // Set up the disconnect event listener
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
 
-                document.getElementById('status').innerText = "Connected to " + device.name;
+                // Connect to the GATT server
+                const server = await bleDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE);
+                sensorCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+                document.getElementById('status').innerText = "Connected to " + bleDevice.name;
+
+                // Automatically read the value upon successful connection
+                await readInterval();
+
             } catch (error) {
                 console.error("Connection failed:", error);
                 document.getElementById('status').innerText = "Error: " + error.message;
             }
         }
 
-        async function writeInterval() {
+        async function readInterval() {
             if (!sensorCharacteristic) {
-                alert("Please connect first!");
+                alert("Please connect to the sensor first.");
                 return;
             }
 
-            const value = document.getElementById('intervalInput').value;
+            try {
+                document.getElementById('status').innerText = "Reading data...";
+                const dataView = await sensorCharacteristic.readValue();
+                
+                const currentInterval = dataView.getUint8(0);
+                
+                // Update the UI
+                document.getElementById('intervalInput').value = currentInterval;
+                document.getElementById('status').innerText = "Read successful, current interval is " + currentInterval + " minutes.";
+                
+            } catch (error) {
+                console.error("Read failed:", error);
+                document.getElementById('status').innerText = "Read Error: " + error.message;
+            }
+        }
+
+        // Helper function for the quick preset buttons
+        function setPreset(minutes) {
+            document.getElementById('intervalInput').value = minutes;
+            writeInterval(); // Automatically send the write command when tapped
+        }        
+
+        async function writeInterval() {
+            if (!sensorCharacteristic) {
+                alert("Please connect to the sensor first.");
+                return;
+            }
+
+            const value = parseInt(document.getElementById('intervalInput').value);
             
-            // BLE uses Little Endian for multi-byte values
-            // We create a 2-byte buffer (uint16)
-            const buffer = new Uint16Array([value]).buffer;
+            // CHANGED: Validation for 1-byte size (max 255)
+            if (isNaN(value) || value < 1 || value > 255) {
+                alert("Please enter a valid number between 1 and 255 minutes.");
+                return;
+            }
+
+            // CHANGED: Create a 1-byte buffer (Uint8Array)
+            const buffer = new Uint8Array([value]).buffer;
             const dataView = new DataView(buffer);
 
             try {
-                // Use writeValueWithResponse to ensure the ESP32 received it
+                document.getElementById('status').innerText = "Writing data...";
                 await sensorCharacteristic.writeValueWithResponse(dataView);
-                alert("Interval updated to " + value + " seconds!");
+                document.getElementById('status').innerText = "Interval set to " + value + " min.";
+                alert("Success! Interval updated to " + value + " minutes.");
             } catch (error) {
                 console.error("Write failed:", error);
-                alert("Write failed: " + error.message);
+                document.getElementById('status').innerText = "Write Error: " + error.message;
             }
+        }
+
+        function disconnectBLE() {
+            if (!sensorCharacteristic) {
+                alert("Please connect to the sensor first.");
+                return;
+            }
+
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+
+        function onDisconnected(event) {
+            document.getElementById('status').innerText = "Disconnected";
+            document.getElementById('intervalInput').value = "";
+            sensorCharacteristic = null;
         }
     </script>
 </body>
