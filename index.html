@@ -11,6 +11,7 @@
         button:hover { background-color: #0056b3; }
         button.danger { background-color: #dc3545; border-color: #a71d2a; }
         button.danger:hover { background-color: #a71d2a; }
+        button:disabled { background-color: #cccccc; border-color: #999999; cursor: not-allowed; color: #666666; }
         
         /* Preset buttons styling */
         .preset-row { display: flex; gap: 10px; margin-bottom: 10px; }
@@ -19,15 +20,52 @@
         
         input { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
         .status-box { padding: 10px; background: #e9ecef; border-radius: 5px; margin-bottom: 15px; text-align: center; font-weight: bold; }
+
+        /* Navigation Bar Styling */
+        .navbar {
+            background-color: #007bff; /* Matches your primary button color */
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .navbar a {
+            flex: 1;
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+
+        .navbar a:hover {
+            background-color: #0056b3;
+        }
+
+        /* Highlights the page the user is currently looking at */
+        .navbar a.active {
+            background-color: #0056b3;
+            border-bottom: 4px solid #ffc107; /* Yellow accent line */
+        }
     </style>
 </head>
 <body>
+    <div class="navbar">
+        <a href="index.html" class="active">⚙️ Configuration</a>
+        <a href="monitor.html">📊 Live Monitor</a>
+    </div>
+    
     <div class="card">
         <h2>Cow Barn Sensor Configuration</h2>
         
         <div class="status-box" id="status">Status: Disconnected</div>
         
-        <button onclick="connectBLE()">Connect to Sensor</button>
+        <button onclick="connectBLE()" id="connectBLE">Connect to Sensor</button>
         <button class="danger" onclick="disconnectBLE()">Disconnect</button>
         
         <hr>
@@ -55,6 +93,7 @@
 
         async function connectBLE() {
             try {
+                document.getElementById('connectBLE').disabled = true;
                 document.getElementById('status').innerText = "Searching for all devices...";
                 
                 // Scan for the device
@@ -71,7 +110,8 @@
                 const service = await server.getPrimaryService(SERVICE);
                 sensorCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-                document.getElementById('status').innerText = "Connected to " + bleDevice.name;
+                // document.getElementById('status').innerText = "Connected to " + bleDevice.name;
+                document.getElementById('connectBLE').innerText = "Connected to " + bleDevice.name;
 
                 // Automatically read the value upon successful connection
                 await readInterval();
@@ -79,6 +119,7 @@
             } catch (error) {
                 console.error("Connection failed:", error);
                 document.getElementById('status').innerText = "Error: " + error.message;
+                document.getElementById('connectBLE').disabled = false;
             }
         }
 
@@ -152,6 +193,8 @@
 
         function onDisconnected(event) {
             document.getElementById('status').innerText = "Disconnected";
+            document.getElementById('connectBLE').innerText = "Connect to Sensor"
+            document.getElementById('connectBLE').disabled = false;
             document.getElementById('intervalInput').value = "";
             sensorCharacteristic = null;
         }

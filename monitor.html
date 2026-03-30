@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Barn Monitor - Live Data</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; text-align: center; }
+        .header { margin-bottom: 20px; }
+        button { padding: 12px 20px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 8px; border: none; background-color: #28a745; color: white; width: 100%; max-width: 400px; margin-bottom: 20px;}
+        button.danger { background-color: #dc3545; display: none; }
+        
+        /* Dashboard Grid Setup - Now 3 columns wide on larger screens */
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; max-width: 600px; margin: auto; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-top: 5px solid #007bff; }
+        
+        /* Custom Card Colors */
+        .card.h2s { border-top-color: #ffc107; } 
+        .card.humidity { border-top-color: #17a2b8; } 
+        .card.temp { border-top-color: #dc3545; } 
+        .card.co2 { border-top-color: #6c757d; }
+        .card.ch4 { border-top-color: #fd7e14; }
+        
+        .value { font-size: 28px; font-weight: bold; margin: 10px 0; color: #333; }
+        .unit { font-size: 14px; color: #777; }
+        #status { margin-bottom: 20px; font-weight: bold; color: #666; }
+
+        /* Navigation Bar Styling */
+        .navbar {
+        background-color: #007bff; /* Matches your primary button color */
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: flex;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .navbar a {
+        flex: 1;
+        display: block;
+        color: white;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+        font-size: 16px;
+        font-weight: bold;
+        transition: background-color 0.3s ease;
+        }
+
+        .navbar a:hover {
+        background-color: #0056b3;
+        }
+
+        /* Highlights the page the user is currently looking at */
+        .navbar a.active {
+        background-color: #0056b3;
+        border-bottom: 4px solid #ffc107; /* Yellow accent line */
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="index.html">⚙️ Configuration</a>
+        <a href="monitor.html" class="active">📊 Live Monitor</a>
+    </div>
+    
+    <div class="header">
+        <h2>Live Barn Environment</h2>
+        <div id="status">Status: Disconnected</div>
+        <button id="connectBtn" onclick="connectAndSubscribe()">Connect & Monitor</button>
+        <button id="disconnectBtn" class="danger" onclick="disconnectBLE()">Stop Monitoring</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="card">
+            <div>Ammonia (NH3)</div>
+            <div class="value" id="val-nh3">--</div>
+            <div class="unit">PPM</div>
+        </div>
+
+        <div class="card ch4">
+            <div>Methane (CH4)</div>
+            <div class="value" id="val-ch4">--</div>
+            <div class="unit">PPM</div>
+        </div>
+
+        <div class="card h2s">
+            <div>Hydrogen Sulfide (H2S)</div>
+            <div class="value" id="val-h2s">--</div>
+            <div class="unit">PPM</div>
+        </div>
+
+        <div class="card co2">
+            <div>Carbon Dioxide (CO2)</div>
+            <div class="value" id="val-co2">--</div>
+            <div class="unit">PPM</div>
+        </div>
+
+        <div class="card temp">
+            <div>Temperature</div>
+            <div class="value" id="val-temp">--</div>
+            <div class="unit">&deg;C</div>
+        </div>
+
+        <div class="card humidity">
+            <div>Humidity</div>
+            <div class="value" id="val-hum">--</div>
+            <div class="unit">% RH</div>
+        </div>
+    </div>
+
+    <script>
+        const SERVICE_UUID = '0000181a-0000-1000-8000-00805f9b34fb';
+        const NH3_UUID     = 0x2BCF;
+        const CO2_UUID     = 0x2B8C; 
+        const TEMP_UUID    = 0x2A6E; 
+        
+        // Assuming you use custom UUIDs for non-standard byte lengths
+        const CH4_UUID     = 0x2BD1; // Update if using a custom 128-bit UUID
+        const HUMID_UUID   = 0x2A6F; // Update if using a custom 128-bit UUID
+        const H2S_UUID     = '25fb7fb2-cb46-440b-b680-b6efc652e168'; 
+
+        let bleDevice;
+
+        async function connectAndSubscribe() {
+            try {
+                document.getElementById('status').innerText = "Connecting...";
+                
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'CowBarn' }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                const server = await bleDevice.gatt.connect();
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                document.getElementById('status').innerText = "Subscribing to sensors...";
+
+                // Pass the expected byte length for each sensor!
+                await subscribeToGas(service, NH3_UUID,   'val-nh3',  2);
+                await subscribeToGas(service, CH4_UUID,   'val-ch4',  4); // 4 bytes!
+                await subscribeToGas(service, H2S_UUID,   'val-h2s',  2);
+                await subscribeToGas(service, CO2_UUID,   'val-co2',  2);
+                await subscribeToGas(service, TEMP_UUID,  'val-temp', 2);
+                await subscribeToGas(service, HUMID_UUID, 'val-hum',  1); // 1 byte!
+
+                document.getElementById('status').innerText = "Live Data Stream Active from " + bleDevice.name;
+                document.getElementById('status').style.color = "#28a745";
+                
+                document.getElementById('connectBtn').style.display = "none";
+                document.getElementById('disconnectBtn').style.display = "inline-block";
+
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById('status').innerText = "Error: " + error.message;
+            }
+        }
+
+        async function subscribeToGas(service, charUUID, htmlElementId, byteLength) {
+            try {
+                const characteristic = await service.getCharacteristic(charUUID);
+                await characteristic.startNotifications();
+                
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    let rawValue = 0;
+                    let floatValue;
+                    
+                    // Dynamically parse based on the hardware's data length
+                    if (byteLength === 1) {
+                        rawValue = event.target.value.getUint8(0);
+                    } else if (byteLength === 2) {
+                        rawValue = event.target.value.getUint16(0, true); // true = Little Endian
+                    } else if (byteLength === 4) {
+                        rawValue = event.target.value.getUint32(0, true); // true = Little Endian
+                    }
+
+                    // Divide by 10 to show decimal, assuming CPFD exponent is -1 for all
+                    if (charUUID === NH3_UUID || charUUID === H2S_UUID || charUUID === TEMP_UUID) {
+                        floatValue = rawValue / 10.0;
+                        document.getElementById(htmlElementId).innerText = floatValue.toFixed(1);
+                    }
+                    else{
+                        document.getElementById(htmlElementId).innerText = rawValue;
+                    }
+                    
+                });
+            } catch (error) {
+                console.warn(`Could not subscribe to ${charUUID}. Is it missing from the ESP32 GATT table?`);
+            }
+        }
+
+        function disconnectBLE() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            }
+        }
+
+        function onDisconnected() {
+            document.getElementById('status').innerText = "Disconnected";
+            document.getElementById('status').style.color = "#dc3545";
+            
+            document.getElementById('connectBtn').style.display = "inline-block";
+            document.getElementById('disconnectBtn').style.display = "none";
+            
+            const ids = ['val-nh3', 'val-ch4', 'val-h2s', 'val-co2', 'val-temp', 'val-hum'];
+            ids.forEach(id => document.getElementById(id).innerText = "--");
+        }
+    </script>
+</body>
+</html>
