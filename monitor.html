@@ -26,34 +26,35 @@
 
         /* Navigation Bar Styling */
         .navbar {
-        background-color: #007bff; /* Matches your primary button color */
-        border-radius: 8px;
-        margin-bottom: 20px;
-        display: flex;
-        overflow: hidden;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background-color: #007bff; /* Matches your primary button color */
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         .navbar a {
-        flex: 1;
-        display: block;
-        color: white;
-        text-align: center;
-        padding: 14px 16px;
-        text-decoration: none;
-        font-size: 16px;
-        font-weight: bold;
-        transition: background-color 0.3s ease;
+            flex: 1;
+            display: block;
+            color: white;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
         }
 
         .navbar a:hover {
-        background-color: #0056b3;
+            background-color: #0056b3;
         }
 
         /* Highlights the page the user is currently looking at */
         .navbar a.active {
-        background-color: #0056b3;
-        border-bottom: 4px solid #ffc107; /* Yellow accent line */
+            background-color: #0056b3;
+            border-bottom: 4px solid #ffc107; /* Yellow accent line */
+            pointer-events: none;
         }
     </style>
 </head>
@@ -62,7 +63,7 @@
         <a href="index.html">⚙️ Configuration</a>
         <a href="monitor.html" class="active">📊 Live Monitor</a>
     </div>
-    
+
     <div class="header">
         <h2>Live Barn Environment</h2>
         <div id="status">Status: Disconnected</div>
