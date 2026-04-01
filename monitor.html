@@ -24,6 +24,18 @@
         .unit { font-size: 14px; color: #777; }
         #status { margin-bottom: 20px; font-weight: bold; color: #666; }
 
+        .card.error {
+            opacity: 0.4;
+            border-top-color: #6c757d !important; /* Overrides the normal color to Gray */
+            background-color: #e9ecef;
+            pointer-events: none; /* Prevents user interaction if you add buttons later */
+        }
+
+        .card.error .value {
+            color: #dc3545; /* Red text for the ERR label */
+            font-size: 24px;
+        }
+
         /* Navigation Bar Styling */
         .navbar {
             background-color: #007bff; /* Matches your primary button color */
@@ -72,37 +84,37 @@
     </div>
 
     <div class="dashboard">
-        <div class="card">
+        <div class="card" id="card-nh3">
             <div>Ammonia (NH3)</div>
             <div class="value" id="val-nh3">--</div>
             <div class="unit">PPM</div>
         </div>
 
-        <div class="card ch4">
+        <div class="card ch4" id="card-ch4">
             <div>Methane (CH4)</div>
             <div class="value" id="val-ch4">--</div>
             <div class="unit">PPM</div>
         </div>
 
-        <div class="card h2s">
+        <div class="card h2s" id="card-h2s">
             <div>Hydrogen Sulfide (H2S)</div>
             <div class="value" id="val-h2s">--</div>
             <div class="unit">PPM</div>
         </div>
 
-        <div class="card co2">
+        <div class="card co2" id="card-co2">
             <div>Carbon Dioxide (CO2)</div>
             <div class="value" id="val-co2">--</div>
             <div class="unit">PPM</div>
         </div>
 
-        <div class="card temp">
+        <div class="card temp" id="card-temp">
             <div>Temperature</div>
             <div class="value" id="val-temp">--</div>
             <div class="unit">&deg;C</div>
         </div>
 
-        <div class="card humidity">
+        <div class="card humidity" id="card-hum">
             <div>Humidity</div>
             <div class="value" id="val-hum">--</div>
             <div class="unit">% RH</div>
@@ -110,17 +122,17 @@
     </div>
 
     <script>
-        const SERVICE_UUID = '0000181a-0000-1000-8000-00805f9b34fb';
-        const NH3_UUID     = 0x2BCF;
-        const CO2_UUID     = 0x2B8C; 
-        const TEMP_UUID    = 0x2A6E; 
-        
-        // Assuming you use custom UUIDs for non-standard byte lengths
-        const CH4_UUID     = 0x2BD1; // Update if using a custom 128-bit UUID
-        const HUMID_UUID   = 0x2A6F; // Update if using a custom 128-bit UUID
-        const H2S_UUID     = '25fb7fb2-cb46-440b-b680-b6efc652e168'; 
+        const SERVICE_UUID          = '0000181a-0000-1000-8000-00805f9b34fb';
+        const SENSOR_STATUS_UUID    = 'fa6482e9-9276-4347-b0d9-3d4895d48354'
+        const NH3_UUID              = 0x2BCF;
+        const CO2_UUID              = 0x2B8C; 
+        const TEMP_UUID             = 0x2A6E; 
+        const CH4_UUID              = 0x2BD1;
+        const HUMID_UUID            = 0x2A6F;
+        const H2S_UUID              = '25fb7fb2-cb46-440b-b680-b6efc652e168'; 
 
         let bleDevice;
+        let sensorStatusChar;
 
         async function connectAndSubscribe() {
             try {
@@ -137,6 +149,8 @@
                 const service = await server.getPrimaryService(SERVICE_UUID);
 
                 document.getElementById('status').innerText = "Subscribing to sensors...";
+
+                await subscribeToSensorStatus(service);
 
                 // Pass the expected byte length for each sensor!
                 await subscribeToGas(service, NH3_UUID,   'val-nh3',  2);
@@ -155,6 +169,20 @@
             } catch (error) {
                 console.error("Error:", error);
                 document.getElementById('status').innerText = "Error: " + error.message;
+            }
+        }
+
+        async function subscribeToSensorStatus(service) {
+            try {
+                sensorStatusChar = await service.getCharacteristic(SENSOR_STATUS_UUID);
+                await sensorStatusChar.startNotifications();
+                
+                sensorStatusChar.addEventListener('characteristicvaluechanged', (event) => {
+                    parseErrorBitmask(event.target.value.getUint8(0));
+                });
+
+            } catch (error) {
+                console.warn(`Could not subscribe to Sensor Status. Is it missing from the ESP32 GATT table?`);
             }
         }
 
@@ -190,6 +218,39 @@
                 console.warn(`Could not subscribe to ${charUUID}. Is it missing from the ESP32 GATT table?`);
             }
         }
+
+        function parseErrorBitmask(bitmask) {
+            // Check each bit and apply the fade effect if the bit is 1
+            if (bitmask & 0x80) {   // bit 7 indicates whether the error is with H2S or NH3 (1 = H2S, 0 = NH3)
+                toggleCardFade('card-h2s',  'val-h2s',  bitmask & 0x01);    // Bit 0
+                toggleCardFade('card-nh3',  'val-nh3',  false);
+            }
+            else {
+                toggleCardFade('card-h2s',  'val-h2s',  false);
+                toggleCardFade('card-nh3',  'val-nh3',  bitmask & 0x01);    // Bit 0
+            }
+
+            toggleCardFade('card-co2',  'val-co2',  bitmask & 0x02); // Bit 1
+            toggleCardFade('card-ch4',  'val-ch4',  bitmask & 0x04); // Bit 2
+            toggleCardFade('card-temp', 'val-temp', bitmask & 0x08); // Bit 3
+            toggleCardFade('card-hum',  'val-hum',  bitmask & 0x08); // Bit 3 (Temp/Hum share an I2C chip)
+        }
+
+        function toggleCardFade(cardId, valId, isOK) {
+            const card = document.getElementById(cardId);
+            const valDisplay = document.getElementById(valId);
+            
+            if (!isOK) {
+                card.classList.add('error');
+                valDisplay.innerText = "ERR";
+            } else {
+                card.classList.remove('error');
+                // If it was previously an error, reset the text until the next BLE gas notify arrives
+                if (valDisplay.innerText === "ERR") {
+                    valDisplay.innerText = "--";
+                }
+            }
+        }        
 
         function disconnectBLE() {
             if (bleDevice && bleDevice.gatt.connected) {
