@@ -29,21 +29,24 @@
     </div>
 
     <script>
-        const targetUrl = window.location.href.replace("index.html", "configuration.html");
+        // Explicitly find the directory path to avoid the "index.html" string trap
+        const currentPath = window.location.pathname;
+        const dir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+        const configUrl = window.location.origin + dir + "/configuration.html";
+
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         const isBluefy = navigator.userAgent.includes("Bluefy");
 
         if (isBluefy || !isIOS) {
-            // If already in Bluefy or on Android/PC, skip this page
-            window.location.replace(targetUrl);
+            // Android or Desktop: Go straight to the config UI
+            window.location.replace(configUrl);
         } else {
-            // We are in iOS Safari
+            // iOS Safari: Show the bridge button
             document.getElementById('msg').innerText = "iOS Device Detected";
             document.getElementById('ios-bridge').style.display = "block";
             
-            // This is the Magic Link
-            // It converts https://yoursite.com to bluefy://yoursite.com
-            const bluefyUrl = targetUrl.replace(/^https?:\/\//, 'bluefy://');
+            // Generate the bluefy:// link
+            const bluefyUrl = configUrl.replace(/^https?:\/\//, 'bluefy://');
             document.getElementById('bluefyLink').href = bluefyUrl;
         }
     </script>
