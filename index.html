@@ -21,6 +21,10 @@
 
     <div id="ios-bridge" class="ios-only">
         <a id="bluefyLink" href="#" class="btn">🚀 Open in Bluefy App</a>
+        <p style="margin-top: 20px; color: #666;">Redirect not working?</p>
+        <button onclick="copyUrlToClipboard()" style="background: none; border: 1px solid #ccc; padding: 5px 10px; cursor: pointer; border-radius: 5px;">
+            📋 Copy URL to paste manually
+        </button>
         <div class="instructions">
             <p>iOS Safari does not support Bluetooth.</p>
             <p>Tap above to switch to the Bluefy Browser.</p>
@@ -29,7 +33,6 @@
     </div>
 
     <script>
-        // Explicitly find the directory path to avoid the "index.html" string trap
         const currentPath = window.location.pathname;
         const dir = currentPath.substring(0, currentPath.lastIndexOf('/'));
         const configUrl = window.location.origin + dir + "/configuration.html";
@@ -38,16 +41,21 @@
         const isBluefy = navigator.userAgent.includes("Bluefy");
 
         if (isBluefy || !isIOS) {
-            // Android or Desktop: Go straight to the config UI
             window.location.replace(configUrl);
         } else {
-            // iOS Safari: Show the bridge button
             document.getElementById('msg').innerText = "iOS Device Detected";
             document.getElementById('ios-bridge').style.display = "block";
             
-            // Generate the bluefy:// link
-            const bluefyUrl = configUrl.replace(/^https?:\/\//, 'bluefy://');
+            // THE FIX: Prepend bluefy:// to the FULL https URL
+            const bluefyUrl = "bluefy://" + configUrl;
             document.getElementById('bluefyLink').href = bluefyUrl;
+        }
+
+        // Fail-safe: Manual Copy Function
+        function copyUrlToClipboard() {
+            navigator.clipboard.writeText(configUrl).then(() => {
+                alert("URL Copied! Now open Bluefy and paste it in the address bar.");
+            });
         }
     </script>
 </body>
